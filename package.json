@@ -1,0 +1,47 @@
+{
+  "name": "gaming-platform",
+  "version": "1.0.0",
+  "description": "Gaming Platform - Parcel-based virtual property game with marketplace, rentals, and real-time features",
+  "private": true,
+  "scripts": {
+    "docker:build": "docker-compose build",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:stop": "docker-compose stop",
+    "docker:start": "docker-compose start",
+    "docker:restart": "docker-compose restart",
+    "docker:logs": "docker-compose logs -f",
+    "docker:logs:api": "docker-compose logs -f api-gateway",
+    "docker:logs:payments": "docker-compose logs -f payments-service",
+    "docker:logs:kyc": "docker-compose logs -f kyc-service",
+    "docker:logs:realtime": "docker-compose logs -f realtime-service",
+    "docker:logs:admin": "docker-compose logs -f admin-backend",
+    "docker:logs:nginx": "docker-compose logs -f nginx",
+    "docker:ps": "docker-compose ps",
+    "docker:clean": "docker-compose down -v --remove-orphans",
+    "docker:rebuild": "docker-compose down && docker-compose build --no-cache && docker-compose up -d",
+    "dev:api": "cd api-gateway && npm run dev",
+    "dev:payments": "cd 'Payments Sandbox Connector' && npm run dev",
+    "dev:kyc": "cd KYC && npm run dev",
+    "dev:realtime": "cd 'Real-time Events (WebSocket)' && npm start",
+    "dev:admin-backend": "cd 'Admin Panel/backend' && npm start",
+    "dev:map": "cd 'Frontend Map (React + Mapbox)' && npm run dev",
+    "dev:admin-frontend": "cd 'Admin Panel/frontend' && npm run dev",
+    "test:api": "cd api-gateway && npm test",
+    "test:payments": "cd 'Payments Sandbox Connector' && npm test",
+    "test:kyc": "cd KYC && npm test",
+    "test:realtime": "cd 'Real-time Events (WebSocket)' && npm test"
+  },
+  "keywords": [
+    "gaming",
+    "virtual-property",
+    "marketplace",
+    "geospatial",
+    "postgis",
+    "websocket",
+    "microservices"
+  ],
+  "author": "",
+  "license": "ISC"
+}
+

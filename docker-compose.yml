@@ -1,0 +1,249 @@
+services:
+  # PostgreSQL with PostGIS
+  postgres:
+    image: postgis/postgis:15-3.3-alpine
+    container_name: gaming_postgres
+    environment:
+      POSTGRES_DB: gaming_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "15432:5432"  # External port 15432, internal port 5432
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - gaming_network
+
+  # Redis
+  redis:
+    image: redis:7-alpine
+    container_name: gaming_redis
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "16379:6379"  # External port 16379, internal port 6379
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - gaming_network
+
+  # Database Migrations (init container)
+  migrations:
+    build:
+      context: .
+      dockerfile: migrations/Dockerfile
+    container_name: gaming_migrations
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: gaming_db
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - gaming_network
+    restart: on-failure
+
+  # API Gateway (Auth, Parcels, Wallet, Marketplace, Rentals, Anti-Fraud)
+  api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: Dockerfile
+    container_name: gaming_api_gateway
+    environment:
+      PORT: 4000
+      NODE_ENV: production
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: gaming_db
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production-super-secret-key}
+      JWT_EXPIRES_IN: 24h
+      MARKETPLACE_FEE_PERCENT: 5
+      RENTAL_FEE_PERCENT: 5
+      CORS_ORIGIN: "*"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrations:
+        condition: service_completed_successfully
+    ports:
+      - "4000:4000"
+    networks:
+      - gaming_network
+    restart: unless-stopped
+
+  # Payments Sandbox Connector Service
+  payments-service:
+    build:
+      context: ./Payments Sandbox Connector
+      dockerfile: Dockerfile
+    container_name: gaming_payments
+    environment:
+      PORT: 3005
+      NODE_ENV: production
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: gaming_db
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production-super-secret-key}
+      PAYMENT_WEBHOOK_SECRET: ${PAYMENT_WEBHOOK_SECRET:-payment-webhook-secret}
+      PAYMENT_PROVIDER_URL: https://sandbox.payments.example.com
+    depends_on:
+      migrations:
+        condition: service_completed_successfully
+    ports:
+      - "3005:3005"
+    networks:
+      - gaming_network
+    restart: unless-stopped
+
+  # KYC Service
+  kyc-service:
+    build:
+      context: ./KYC
+      dockerfile: Dockerfile
+    container_name: gaming_kyc
+    environment:
+      PORT: 3007
+      NODE_ENV: production
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: gaming_db
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production-super-secret-key}
+      UPLOAD_DIR: /app/uploads
+    volumes:
+      - kyc_uploads:/app/uploads
+    depends_on:
+      migrations:
+        condition: service_completed_successfully
+    ports:
+      - "3007:3007"
+    networks:
+      - gaming_network
+    restart: unless-stopped
+
+  # Real-time Events (WebSocket) Service
+  realtime-service:
+    build:
+      context: ./Real-time Events (WebSocket)
+      dockerfile: Dockerfile
+    container_name: gaming_realtime
+    environment:
+      REALTIME_PORT: 3006
+      NODE_ENV: production
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production-super-secret-key}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      redis:
+        condition: service_healthy
+      api-gateway:
+        condition: service_started
+    ports:
+      - "3006:3006"
+    networks:
+      - gaming_network
+    restart: unless-stopped
+
+  # Admin Backend Service
+  admin-backend:
+    build:
+      context: ./Admin Panel/backend
+      dockerfile: Dockerfile
+    container_name: gaming_admin_backend
+    environment:
+      PORT: 3008
+      NODE_ENV: production
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: gaming_db
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production-super-secret-key}
+    depends_on:
+      migrations:
+        condition: service_completed_successfully
+    ports:
+      - "3008:3008"
+    networks:
+      - gaming_network
+    restart: unless-stopped
+
+  # Frontend Map (React + Mapbox)
+  frontend-map:
+    build:
+      context: ./Frontend Map (React + Mapbox)
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: http://localhost/api
+        VITE_WS_URL: ws://localhost/ws
+        VITE_MAPBOX_TOKEN: ${MAPBOX_TOKEN:-your-mapbox-token-here}
+    container_name: gaming_frontend_map
+    depends_on:
+      - nginx
+    networks:
+      - gaming_network
+    restart: unless-stopped
+
+  # Admin Frontend (React)
+  admin-frontend:
+    build:
+      context: ./Admin Panel/frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: http://localhost/api
+    container_name: gaming_admin_frontend
+    depends_on:
+      - nginx
+    networks:
+      - gaming_network
+    restart: unless-stopped
+
+  # Nginx Reverse Proxy
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    container_name: gaming_nginx
+    ports:
+      - "80:80"
+    depends_on:
+      - api-gateway
+      - payments-service
+      - kyc-service
+      - realtime-service
+      - admin-backend
+    networks:
+      - gaming_network
+    restart: unless-stopped
+
+networks:
+  gaming_network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  kyc_uploads:
+    driver: local
+
