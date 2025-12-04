@@ -1,4 +1,4 @@
-# Gaming Platform
+# Gaming Platform (GAME-GAME)
 
 A comprehensive parcel-based virtual property gaming platform with marketplace, rentals, payments, KYC, and real-time features.
 
